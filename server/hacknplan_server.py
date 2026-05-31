@@ -852,10 +852,6 @@ async def list_attachments(project_id: int, work_item_id: int) -> str:
         return _err(e)
 
 
-if __name__ == "__main__":
-    mcp.run()
-
-
 # ===================== PORTFOLIO BIRDS-EYE (cross-project) =====================
 
 @mcp.tool()
