@@ -4,11 +4,21 @@ This catches the class of bug where a tool registers in-process but fails to
 serialize to the wire `tools/list` (which happened once during development). It
 launches the actual server as a subprocess, does the JSON-RPC handshake, and
 asserts the tool catalog is served. No HacknPlan key needed (no API calls).
+
+The handshake keeps stdin OPEN and reads stdout incrementally until the
+tools/list response arrives, then terminates the process. Closing stdin up front
+(the obvious `subprocess.run(input=...)` approach) lets the MCP stdio server's
+EOF-triggered shutdown race ahead of emitting the response on a cold/slow runner
+— which made this flaky in CI while passing locally. Reading-then-terminating
+removes the race.
 """
 import json
 import os
+import queue
 import subprocess
 import sys
+import threading
+import time
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 SERVER = os.path.join(ROOT, "server", "hacknplan_server.py")
@@ -21,29 +31,75 @@ REQUIRED = {
 }
 
 
-def _list_tools_over_stdio():
-    handshake = "\n".join([
-        json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize",
-                    "params": {"protocolVersion": "2024-11-05", "capabilities": {},
-                               "clientInfo": {"name": "t", "version": "1"}}}),
-        json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}),
-        json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}),
-    ]) + "\n"
+def _list_tools_over_stdio(deadline_s: float = 30.0):
+    """Boot the server, handshake, and return the tool names on the wire.
+
+    Keeps stdin open and reads stdout line-by-line (on a daemon thread, so a
+    silent server can't hang the test) until the `id:2` tools/list result lands
+    or the deadline passes. Then it tears the process down.
+    """
+    messages = [
+        {"jsonrpc": "2.0", "id": 1, "method": "initialize",
+         "params": {"protocolVersion": "2024-11-05", "capabilities": {},
+                    "clientInfo": {"name": "t", "version": "1"}}},
+        {"jsonrpc": "2.0", "method": "notifications/initialized"},
+        {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
+    ]
+    payload = "".join(json.dumps(m) + "\n" for m in messages)
     env = dict(os.environ, HACKNPLAN_API_KEY="x")
-    proc = subprocess.run([sys.executable, SERVER], input=handshake,
-                          capture_output=True, text=True, timeout=60, env=env)
-    names = []
-    for line in proc.stdout.splitlines():
-        line = line.strip()
-        if not line:
-            continue
+    proc = subprocess.Popen(
+        [sys.executable, SERVER],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+        text=True, bufsize=1, env=env,
+    )
+
+    lines: "queue.Queue[str | None]" = queue.Queue()
+
+    def _reader():
         try:
-            msg = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if msg.get("id") == 2 and "result" in msg:
-            names = [t["name"] for t in msg["result"]["tools"]]
-            break
+            for raw in proc.stdout:          # yields complete lines until stdout EOF
+                lines.put(raw)
+        finally:
+            lines.put(None)                  # sentinel: stream closed
+
+    threading.Thread(target=_reader, daemon=True).start()
+
+    names: list[str] = []
+    try:
+        proc.stdin.write(payload)            # do NOT close stdin yet
+        proc.stdin.flush()
+
+        end = time.monotonic() + deadline_s
+        while True:
+            remaining = end - time.monotonic()
+            if remaining <= 0:
+                break
+            try:
+                raw = lines.get(timeout=remaining)
+            except queue.Empty:
+                break
+            if raw is None:                  # server closed stdout
+                break
+            line = raw.strip()
+            if not line:
+                continue
+            try:
+                msg = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if msg.get("id") == 2 and "result" in msg:
+                names = [t["name"] for t in msg["result"]["tools"]]
+                break
+    finally:
+        try:
+            proc.stdin.close()
+        except Exception:
+            pass
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
     return names
 
 
