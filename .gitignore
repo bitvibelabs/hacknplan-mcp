@@ -1,0 +1,23 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+
+# Secrets — never commit credentials
+*.env
+.env
+
+# Private overlay (personal polish config, real portfolio data, dev notes)
+private/
+
+# Local artifacts
+*.html
+/tmp/
+.DS_Store
+
+# Internal working notes (kept out of the public repo)
+CLAUDE.md
+docs/debug-journal.md
+docs/openapi_v0.raw.json

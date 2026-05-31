@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "hacknplan": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/.venv/bin/python3",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/server/hacknplan_server.py"],
+      "env": {
+        "HACKNPLAN_API_KEY": "${HACKNPLAN_API_KEY:-}",
+        "TRELLO_API_KEY": "${TRELLO_API_KEY:-}",
+        "TRELLO_TOKEN": "${TRELLO_TOKEN:-}"
+      }
+    }
+  }
+}

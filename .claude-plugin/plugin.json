@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "hacknplan",
+  "displayName": "HacknPlan",
+  "version": "0.1.0",
+  "description": "MCP server for the HacknPlan project-management API, plus a Trello→HacknPlan migration engine.",
+  "author": { "name": "BitVibe Labs" },
+  "license": "MIT",
+  "keywords": ["hacknplan", "project-management", "trello", "migration", "mcp"]
+}
