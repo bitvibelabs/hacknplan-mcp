@@ -1,0 +1,10 @@
+#!/bin/bash
+# Block commits containing known credentials or obvious secret shapes.
+staged=$(git diff --cached --name-only)
+[ -z "$staged" ] && exit 0
+if git diff --cached | grep -qE "ATTA[a-f0-9]{40,}|AKIA[0-9A-Z]{16}|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|[a-f0-9]{32}"; then
+  echo "pre-commit: possible secret (hex32 / Trello token / AWS / private key) in staged changes. Aborting."
+  echo "If it's a false positive, commit with --no-verify."
+  exit 1
+fi
+exit 0
