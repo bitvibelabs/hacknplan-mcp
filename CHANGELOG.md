@@ -4,6 +4,21 @@ All notable changes to this project are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com); versions follow
 [SemVer](https://semver.org).
 
+## [Unreleased]
+
+### Added
+- `schedule_overview` tool + a "Schedule" section in the HTML dashboard — every
+  dated work item across all projects, bucketed by horizon (Overdue / This week /
+  Next 2 weeks / This month / Later) with a live days-left countdown (**62 tools**).
+- `examples/horizon_boards.py` — create dated This Week / Next 2 Weeks / Later
+  boards in every project and auto-file each card by its due date.
+- `examples/portfolio_board.py` — build an in-HacknPlan portfolio hub (one card
+  per project, live %done + flags).
+- `tests/` — pure-logic unit tests + a stdio boot smoke test; GitHub Actions CI
+  across Python 3.10–3.13.
+- `SECURITY.md` — threat model (stdio server) + honest triage of dependency
+  advisories; `.env.example`; a pre-commit secret-guard hook.
+
 ## [0.1.0] — 2026-05-31
 
 First public release.

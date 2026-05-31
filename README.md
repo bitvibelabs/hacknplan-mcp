@@ -2,7 +2,7 @@
 
 A [Model Context Protocol](https://modelcontextprotocol.io) server for
 [HacknPlan](https://hacknplan.com) — the project-management tool built for game
-development. It gives an AI assistant (Claude, or any MCP client) **61 tools** to
+development. It gives an AI assistant (Claude, or any MCP client) **62 tools** to
 read and write every part of a HacknPlan project: work items, boards, stages,
 categories, tags, importance levels, milestones, dependencies, sub-tasks, work
 logs, comments, the Game Design Model, and metrics.
@@ -77,7 +77,7 @@ A few real prompts, once it's connected:
 
 ---
 
-## The 61 tools
+## The 62 tools
 
 Grouped by what they touch. Read tools are annotated read-only; destructive ones
 (`delete_*`) require an explicit `confirm: true`.
@@ -127,7 +127,9 @@ concise|detailed|json) · `get_work_item` (with sub-tasks + comments) ·
 `list_project_users` · `assign_user` · `unassign_user` · `list_attachments`
 
 **Migration & portfolio** (the value-add layer)
-`migrate_preview` · `migrate_execute` · `migration_status` · `portfolio_overview`
+`migrate_preview` · `migrate_execute` · `migration_status` · `portfolio_overview` ·
+`schedule_overview` (every dated work item across all projects, bucketed by horizon
+with a live days-left countdown)
 
 ---
 
@@ -180,6 +182,16 @@ HacknPlan has no workspace tier, so both let you optionally group projects via a
 `HACKNPLAN_GROUPS` env var (JSON: `{"Team A": ["Website","API"], "Personal": ["Notes"]}`).
 Without it, everything lands under one "All Projects" group.
 
+### Deadlines across everything
+
+`schedule_overview` collects every dated work item from *all* your projects and
+buckets them by horizon — **Overdue · This week · Next 2 weeks · This month ·
+Later** — each with a live days-left countdown. It answers *"what's due and when,
+everywhere?"* in one call (the HTML dashboard renders the same as a Schedule
+section). For an in-HacknPlan version, [`examples/horizon_boards.py`](examples/horizon_boards.py)
+creates dated *This Week / Next 2 Weeks / Later* boards in each project and files
+each card onto the right one by its due date.
+
 ---
 
 ## Three HacknPlan API quirks this server handles for you
@@ -224,7 +236,7 @@ or written to disk.
 ```
 hacknplan-mcp/
 ├── server/
-│   ├── hacknplan_server.py   # FastMCP entrypoint — registers all 61 tools
+│   ├── hacknplan_server.py   # FastMCP entrypoint — registers all 62 tools
 │   ├── client.py             # async HTTP client: auth, rate-limit throttle, retries
 │   ├── formatting.py         # JSON vs Markdown / concise vs detailed output
 │   ├── migrate.py            # Trello → HacknPlan migration engine
