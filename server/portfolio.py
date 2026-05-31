@@ -58,6 +58,7 @@ async def project_rollup(hp: HacknPlanClient, project: dict, now: dt.datetime) -
     closed = open_ = blocked = urgent = high = due_soon = overdue = stories = 0
     by_stage: dict[str, int] = {}
     by_category: dict[str, int] = {}
+    deadlines: list[dict] = []  # individual dated, not-yet-done items (for the Schedule view)
 
     for w in items:
         stage = (w.get("stage") or {})
@@ -87,11 +88,16 @@ async def project_rollup(hp: HacknPlanClient, project: dict, now: dt.datetime) -
         if due and sstatus != "closed":
             try:
                 d = dt.datetime.fromisoformat(due.replace("Z", "+00:00"))
-                days = (d - now).days
+                # calendar-day difference so "due today" == 0 (not a partial-day -1)
+                days = (d.date() - now.date()).days
                 if days < 0:
                     overdue += 1
                 elif days <= 7:
                     due_soon += 1
+                deadlines.append({
+                    "title": w.get("title", ""), "due": due[:10], "days_left": days,
+                    "stage": sname,
+                })
             except Exception:
                 pass
 
@@ -103,6 +109,7 @@ async def project_rollup(hp: HacknPlanClient, project: dict, now: dt.datetime) -
         "blocked": blocked, "urgent": urgent, "high": high,
         "due_soon": due_soon, "overdue": overdue, "stories": stories,
         "by_stage": by_stage, "by_category": by_category,
+        "deadlines": deadlines,
     }
 
 
@@ -131,8 +138,46 @@ async def portfolio(hp: HacknPlanClient, now: dt.datetime) -> dict:
     for gt in group_totals.values():
         gt["pct_done"] = round(100 * gt["closed"] / gt["total"]) if gt["total"] else 0
 
+    # flat, date-sorted list of every upcoming deadline across all projects (the
+    # Schedule view): each item carries its project + a live days-left countdown.
+    schedule = []
+    for r in rolled:
+        for dl in r.get("deadlines", []):
+            schedule.append({**dl, "project": r["name"], "group": r["group"]})
+    schedule.sort(key=lambda x: x["days_left"])
+
     return {"generated_at": now.isoformat(), "grand": grand,
-            "groups": group_totals, "projects": rolled}
+            "groups": group_totals, "projects": rolled, "schedule": schedule}
+
+
+# horizon buckets for the countdown view
+SCHEDULE_BUCKETS = [
+    ("Overdue", lambda d: d < 0),
+    ("This week (≤7d)", lambda d: 0 <= d <= 7),
+    ("Next 2 weeks (8–14d)", lambda d: 8 <= d <= 14),
+    ("This month (15–30d)", lambda d: 15 <= d <= 30),
+    ("Later (>30d)", lambda d: d > 30),
+]
+
+
+def to_schedule_markdown(p: dict) -> str:
+    """A countdown 'Schedule' view: every dated task, bucketed by horizon, with
+    live days-left. Complements the stage board (which is workflow, not time)."""
+    sched = p.get("schedule", [])
+    if not sched:
+        return "_No upcoming deadlines (no work items have a due date set)._"
+    lines = [f"# Schedule — {len(sched)} upcoming deadlines (as of {p['generated_at'][:10]})", ""]
+    for label, pred in SCHEDULE_BUCKETS:
+        rows = [s for s in sched if pred(s["days_left"])]
+        if not rows:
+            continue
+        lines.append(f"## {label} — {len(rows)}")
+        for s in rows:
+            d = s["days_left"]
+            cd = f"{-d}d overdue" if d < 0 else ("due today" if d == 0 else f"{d}d left")
+            lines.append(f"- **{cd}** · {s['due']} · {s['project']} — {s['title']}")
+        lines.append("")
+    return "\n".join(lines)
 
 
 def _group_order(p: dict) -> list[str]:

@@ -24,7 +24,8 @@ from mcp.server.fastmcp import FastMCP  # noqa: E402
 from client import HacknPlanClient, HacknPlanError  # noqa: E402
 from formatting import as_json, format_list  # noqa: E402
 from migrate import Migrator  # noqa: E402
-from portfolio import portfolio as _portfolio, to_markdown as _portfolio_md  # noqa: E402
+from portfolio import (portfolio as _portfolio, to_markdown as _portfolio_md,  # noqa: E402
+                       to_schedule_markdown as _schedule_md)
 from trello import TrelloClient  # noqa: E402
 
 mcp = FastMCP("hacknplan")
@@ -868,6 +869,25 @@ async def portfolio_overview(format: str = "markdown") -> str:
         if format == "json":
             return as_json(data)
         return _portfolio_md(data)
+    except Exception as e:
+        return _err(e)
+
+
+@mcp.tool()
+async def schedule_overview(format: str = "markdown") -> str:
+    """ALL-PROJECTS deadline countdown — every work item that has a due date,
+    across every project, bucketed by time horizon (Overdue / This week ≤7d /
+    Next 2 weeks 8-14d / This month 15-30d / Later) with a live days-left countdown.
+    This is the time/scheduling view that complements the stage board (which tracks
+    workflow, not time). Use for 'what's due soon', 'what's overdue', 'deadlines',
+    'what should I do this week'. format: 'markdown' | 'json'."""
+    try:
+        import datetime as _dt
+        now = _dt.datetime.now(_dt.timezone.utc)
+        data = await _portfolio(hp(), now)
+        if format == "json":
+            return as_json(data.get("schedule", []))
+        return _schedule_md(data)
     except Exception as e:
         return _err(e)
 
